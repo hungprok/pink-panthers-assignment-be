@@ -1,7 +1,10 @@
 const db = require("./database");
+const fs = require("fs");
+const path = require("path");
 
+const directory = "./uploads";
 function getAll(tableName, callback) {
-  db.any(`SELECT * FROM public."${tableName}"`)
+  db.any(`SELECT * FROM public."${tableName}" WHERE is_deleted = 'FALSE'`)
     .then((result) => {
       callback(null, result);
     })
@@ -11,7 +14,7 @@ function getAll(tableName, callback) {
 }
 
 function getSingle(tableName, id, callback) {
-  db.any(`SELECT * FROM public."${tableName}" WHERE id = ${id}`)
+  db.any(`SELECT * FROM public."${tableName}" WHERE id = ${Number(id)}`)
     .then((result) => {
       if (result.length) {
         callback(null, result);
@@ -26,7 +29,7 @@ function getSingle(tableName, id, callback) {
 
 function add(tableName, obj, callback) {
   db.any(
-    `INSERT INTO ${tableName} (title, description, images) VALUES('${obj.title}', ${obj.description}, '${obj.images}'`
+    `INSERT INTO public."${tableName}" (id, title, description, images) SELECT COUNT(*) + 1, '${obj.title}', '${obj.description}', '${obj.images}' FROM public."${tableName}"`
   )
     .then((result) => {
       callback(null, "You added an item!");
@@ -36,14 +39,18 @@ function add(tableName, obj, callback) {
     });
 }
 
-function updateSingle(tableName, id, field, value, callback) {
-  db.any(`UPDATE ${tableName} SET ${field} = ${value} WHERE id = ${id} returning id`)
+function updateSingle(tableName, id, obj, callback) {
+  let query = [];
+  for (const [key, value] of Object.entries(obj)) {
+    query.push(`${key} = '${value}'`);
+  }
+  const script = `UPDATE public."${tableName}" SET ${query.join(
+    ","
+  )} WHERE id = '${id}'`;
+  console.log(script);
+  db.any(script)
     .then((result) => {
-      if (result.length) {
-        callback(null, "You updated an item!");
-      } else {
-        callback("That item doesn't exist");
-      }
+      callback(null, "You updated an item!");
     })
     .catch((err) => {
       callback(err);
@@ -51,17 +58,34 @@ function updateSingle(tableName, id, field, value, callback) {
 }
 
 function deleteSingle(tableName, id, callback) {
-  db.any(`DELETE FROM ${tableName} WHERE id=${id} returning id`)
+  db.any(`DELETE FROM public."${tableName}" WHERE id=${id}`)
     .then((result) => {
-      if (result.length) {
-        callback(null, "You deleted an item!");
-      } else {
-        callback("That item doesn't exist");
-      }
+      callback(null, "You deleted an item!");
     })
     .catch((err) => {
       callback(err);
     });
+}
+
+function cleanUpDir() {
+  fs.readdir(directory, (err, files) => {
+    if (err) {
+      console.error(`Error reading directory ${directory}:`, err);
+      return;
+    }
+
+    files.forEach((file) => {
+      const filePath = path.join(directory, file);
+      fs.unlink(filePath, (err) => {
+        if (err) {
+          console.error(`Error deleting file ${filePath}:`, err);
+          return;
+        }
+
+        console.log(`Deleted file: ${filePath}`);
+      });
+    });
+  });
 }
 
 module.exports = {
@@ -70,4 +94,5 @@ module.exports = {
   add,
   updateSingle,
   deleteSingle,
+  cleanUpDir,
 };
