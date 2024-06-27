@@ -18,10 +18,11 @@ router.post("/", upload.array("files"), async function (req, res, next) {
     const bucketName = "pink-panthers-assignment";
     Promise.all(
       await files.map(async (file) => {
-        const filePath = `${Date.now()}_${file.name}`;
+        const fileName = `${file.filename}_${file.originalname}`;
+        const fileStream = fs.createReadStream(file.path);
         const { data, error } = await supabase.storage
           .from(bucketName)
-          .upload(file.filename, filePath);
+          .upload(fileName, fileStream);
         if (error) {
           console.error("Error uploading file:", error.message);
           return res
